@@ -350,6 +350,12 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclCo
   TRACE(NCCL_NET,"opCount %lx slicesteps %d spl %d cpl %d nbytes %zi -> llmode %d nchannels %d nthreads %d, nloops %d nsteps %d comm %p",
       coll->args.opCount, proxyArgs->sliceSteps, info->nstepsPerLoop, info->nchunksPerLoop, nBytes, llMode, coll->args.nChannels, coll->args.nThreads,
       nLoops, proxyArgs->nsteps, info->comm);
+
+  for(int i=0;i<8;i++) {
+    coll->args.starts[i] = info->comm->starts[i];
+    coll->args.start_segments[i] = info->comm->start_segments[i];
+  }
+
   return ncclSuccess;
 }
 

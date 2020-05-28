@@ -23,6 +23,7 @@
 #include "cpuset.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -934,6 +935,27 @@ static ncclResult_t setCpuAffinity(int cudaDev) {
   return ncclSuccess;
 }
 
+ncclResult_t readPrrSettings(ncclComm_t newcomm) {
+  char* start_ranks_env = getenv("NCCL_START_RANKS");
+  char* start_segments_env = getenv("NCCL_START_SEGMENTS");
+  if (start_ranks_env && start_segments_env) {
+    if(strlen(start_ranks_env) != strlen(start_segments_env)) {
+      return ncclInvalidArgument;
+    }
+    int it = 0;
+    while(start_ranks_env[it]) {
+      newcomm->starts[it] = start_ranks_env[it]-'0';
+      newcomm->start_segments[it] = start_segments_env[it]-'0';
+      it++;
+    }
+    newcomm->starts[it] = -1;
+    newcomm->start_segments[it] = -1;
+    INFO(NCCL_INIT,"Read pre-reduced ring settings: start ranks=%s, start segments=%s",
+         start_ranks_env, start_segments_env);
+  }
+  return ncclSuccess;
+}
+
 ncclResult_t ncclCommInitRankSync(ncclComm_t* newcomm, int nranks, ncclUniqueId commId, int myrank) {
   cpu_set_t affinitySave;
   sched_getaffinity(0, sizeof(cpu_set_t), &affinitySave);
@@ -950,6 +972,7 @@ ncclResult_t ncclCommInitRankSync(ncclComm_t* newcomm, int nranks, ncclUniqueId 
   NCCLCHECKGOTO(commAlloc(newcomm, nranks, myrank), res, cleanup);
   NCCLCHECKGOTO(initTransportsRank(*newcomm, &commId), res, cleanup);
   NCCLCHECKGOTO(devCommSetup(*newcomm), res, cleanup);
+  NCCLCHECKGOTO(readPrrSettings(*newcomm), res, cleanup);
 
   sched_setaffinity(0, sizeof(cpu_set_t), &affinitySave);
   NCCLCHECKGOTO(wrapNvmlShutdown(), res, cleanup);

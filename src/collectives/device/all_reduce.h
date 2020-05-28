@@ -22,6 +22,84 @@ __device__ void ncclAllReduceRingKernel(struct CollectiveArgs* args) {
   const int chunkSize = stepSize * ALLREDUCE_CHUNKSTEPS;
   const ssize_t loopSize = args->nChannels*(ssize_t)chunkSize;
 
+  const int rank = ring->devUserRanks[0];
+  const int8_t* start_segments = args->start_segments;
+  const int8_t* starts = args->starts;
+
+  // Compute pointers
+  const T * __restrict__ thisInput = (const T*)args->ThisInput;
+  T * __restrict__ thisOutput = (T*)args->ThisOutput;
+
+  ncclPrimitives<UNROLL, ALLREDUCE_CHUNKSTEPS/ALLREDUCE_SLICESTEPS, ALLREDUCE_SLICESTEPS, T, 1, 1, FUNC>
+    prims(tid, nthreads, &ring->prev, &ring->next, thisOutput, stepSize, channel, comm, args->opCount);
+
+  for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += nranks*loopSize) {
+    int realChunkSize = min(chunkSize, DIVUP(size-gridOffset,nranks*args->nChannels));
+    ALIGN_SIZE(realChunkSize, nthreads*sizeof(uint64_t)/sizeof(T));
+    ssize_t chunkOffset = gridOffset + bid*nranks*realChunkSize;
+
+    /////////////// begin AllReduce steps ///////////////
+    ssize_t offset;
+    int nelem;
+    int slice;
+
+    // starting slice
+    slice = start_segments[rank];
+    offset = chunkOffset + slice * realChunkSize;
+    nelem = min(realChunkSize, size-offset);
+    // reduce and copy to next GPU
+    for (int j=0; j<nranks; ++j) {
+      if(rank == starts[slice]) {
+        if(threadIdx.x == 0) { printf("Reduce: send slice: %d", slice);}
+        prims.send(thisInput+offset, nelem);
+        if(threadIdx.x == 0) { printf(" done\n"); }
+      } else if(rank == (starts[slice]+nranks-1)%nranks) {
+        if(threadIdx.x == 0) { printf("Reduce: directRecvReduceCopySend slice: %d", slice);}
+        prims.directRecvReduceCopySend(thisInput+offset, thisOutput+offset, offset, nelem);
+        if(threadIdx.x == 0) { printf(" done\n"); }
+      } else {
+        if(threadIdx.x == 0) { printf("Reduce: recvReduceSend: %d", slice);}
+        prims.recvReduceSend(thisInput+offset, nelem);
+        if(threadIdx.x == 0) { printf(" done\n"); }
+      }
+      slice = (slice+nranks-1)%nranks;
+      offset = chunkOffset + slice * realChunkSize;
+      nelem = min(realChunkSize, size-offset);
+    }
+
+    // copy to next GPU
+    for (int j=0; j<nranks; ++j) {
+      if(rank != (starts[slice]+nranks-1)%nranks && rank != (starts[slice]+nranks-2)%nranks) {
+        if(threadIdx.x == 0) { printf("Override: directRecvCopySend: %d", slice);}
+        prims.directRecvCopySend(thisOutput+offset, offset, nelem);
+        if(threadIdx.x == 0) { printf(" done\n");}
+      } else if(rank != (starts[slice]+nranks-1)%nranks) {
+        if(threadIdx.x == 0) { printf("Override: directRecv slice: %d", slice);}
+        prims.directRecv(thisOutput+offset, offset, nelem);
+        if(threadIdx.x == 0) { printf(" done\n");}
+      }
+      slice = (slice+nranks-1)%nranks;
+      offset = chunkOffset + slice * realChunkSize;
+      nelem = min(realChunkSize, size-offset);
+    }
+  }
+  if(threadIdx.x == 0) { printf("kernel end\n");}
+}
+
+template<int UNROLL, class FUNC, typename T>
+__device__ void ncclAllReduceRingKernelOld(struct CollectiveArgs* args) {
+  const int tid = threadIdx.x;
+  const int nthreads = blockDim.x - 1;
+  const int bid = args->bid;
+  struct ncclDevComm* comm = args->comm;
+  struct ncclChannel* channel = comm->channels+blockIdx.x;
+  struct ncclRing* ring = &channel->ring;
+  const ssize_t size = args->N;
+  const int nranks = comm->nRanks;
+  const int stepSize = channel->buffSize / (sizeof(T)*NCCL_STEPS);
+  const int chunkSize = stepSize * ALLREDUCE_CHUNKSTEPS;
+  const ssize_t loopSize = args->nChannels*(ssize_t)chunkSize;
+
   // Compute pointers
   const T * __restrict__ thisInput = (const T*)args->ThisInput;
   T * __restrict__ thisOutput = (T*)args->ThisOutput;

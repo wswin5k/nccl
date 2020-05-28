@@ -1,0 +1,22 @@
+des06:4134:4134 [0] NCCL INFO Bootstrap : Using [0]enp0s31f6:172.20.83.206<0>
+des06:4134:4134 [0] NCCL INFO NET/Plugin : No plugin found (libnccl-net.so).
+des06:4134:4134 [0] NCCL INFO NET/IB : No device found.
+des06:4134:4134 [0] NCCL INFO NET/Socket : Using [0]enp0s31f6:172.20.83.206<0>
+des06:4134:4141 [0] NCCL INFO Setting affinity for GPU 0 to ff
+des06:4134:4141 [0] NCCL INFO NCCL_TREE_THRESHOLD set by environment to 0.
+des06:4134:4141 [0] NCCL INFO CUDA Dev 0[0], Socket NIC distance :  PHB
+des06:4134:4141 [0] NCCL INFO Ring 00 : 2 -> 3 [receive] via NET/Socket/0
+des06:4134:4141 [0] NCCL INFO NET/Socket: Using 1 threads and 1 sockets per thread
+des06:4134:4141 [0] NCCL INFO Ring 00 : 3 -> 0 [send] via NET/Socket/0
+des06:4134:4141 [0] NCCL INFO Read pre-reduced ring settings: start ranks=0001, start segments=2333
+des06:4134:4141 [0] NCCL INFO comm 0x7f93d4002280 rank 3 nranks 4 cudaDev 0 nvmlDev 0 - Init COMPLETE
+Reduce: recvReduceSend: 3 done
+Reduce: directRecvReduceCopySend slice: 2 done
+Reduce: directRecvReduceCopySend slice: 1 done
+Reduce: directRecvReduceCopySend slice: 0 done
+Override: directRecv slice: 3 done
+Reduce: recvReduceSend: 3 done
+Reduce: directRecvReduceCopySend slice: 2 done
+Reduce: directRecvReduceCopySend slice: 1 done
+Reduce: directRecvReduceCopySend slice: 0 done
+Override: directRecv slice: 3

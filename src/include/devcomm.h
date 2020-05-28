@@ -130,6 +130,9 @@ struct CollectiveArgs {
   uint16_t nThreads;
 
   int lastChunkSize;
+
+  int8_t start_segments[8];
+  int8_t starts[8];
 };
 struct ncclColl {
   union {
@@ -139,10 +142,10 @@ struct ncclColl {
       uint16_t nextIndex;
       uint8_t  active;
     };
-    int data[0x10];
+    int data[0x40];
   };
 };
-static_assert(sizeof(struct ncclColl) == (0x10*sizeof(int)), "ncclColl must have a pow2 size");
+static_assert(sizeof(struct ncclColl) == (0x40*sizeof(int)), "ncclColl must have a pow2 size");
 
 struct ncclChannel {
   union {

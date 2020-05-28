@@ -122,6 +122,10 @@ struct ncclComm {
   // Global proxy thread
   pthread_t proxyThread;
   struct ncclProxyState proxyState;
+
+  //  prr arguments
+  int starts[8];
+  int start_segments[8];
 };
 
 #endif
