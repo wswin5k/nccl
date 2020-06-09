@@ -4,9 +4,12 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 
+#include <stdio.h>
+#include <sys/time.h>
 #include "enqueue.h"
 #include "checks.h"
 #include "param.h"
+#include "utils.h"
 
 #include "collectives/collectives.h"
 
@@ -103,6 +106,7 @@ ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* params)
   coll->active = 0;
 
   params->func = ncclKerns[coll->funcIndex];
+  comm->funcIndex = coll->funcIndex;
   return ncclSuccess;
 }
 
@@ -193,9 +197,18 @@ ncclResult_t ncclBarrierEnqueueWait(ncclComm_t comm) {
   NCCLCHECK(ncclCpuBarrierOut(comm));
 
   struct cudaLaunchParams *params = comm->myParams;
+
+  cudaEvent_t start, stop;
+  cudaEventCreateWithFlags(&start, cudaEventBlockingSync);
+  cudaEventCreateWithFlags(&stop, cudaEventBlockingSync);
+  struct timeval tv;
+
+  cudaEventRecord(start, params->stream);
+  gettimeofday(&tv, NULL);
   if (comm->launchMode == ncclComm::PARALLEL) {
     CUDACHECK(cudaLaunchKernel(params->func, params->gridDim, params->blockDim, params->args, params->sharedMem, params->stream));
   }
+  cudaEventRecord(stop, params->stream);
   // Start the network proxies as soon as the kernel has been launched. We can't
   // perform any CUDA call between the two or having a cudaFree between the CUDA
   // launch and the transportStartProxy call could cause a deadlock.
@@ -208,6 +221,13 @@ ncclResult_t ncclBarrierEnqueueWait(ncclComm_t comm) {
   }
   params->gridDim.x = params->blockDim.x = 0;
   NCCLCHECK(transportStartProxy(comm));
+  cudaEventSynchronize(stop);
+  float milliseconds = 0;
+  cudaEventElapsedTime(&milliseconds, start, stop);
+  if (comm->funcIndex >= 576 && comm->funcIndex <= 719) { // all-reduce operations
+     fprintf(stderr, "%ld.%06ld %f\n", tv.tv_sec, tv.tv_usec, milliseconds);
+     //estimate(comm, &tv);
+  }
   return ncclSuccess;
 }
 

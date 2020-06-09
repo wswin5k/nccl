@@ -7,9 +7,12 @@
 #include "utils.h"
 #include "debug.h"
 #include "nccl_net.h"
+#include "bootstrap.h"
 #include <unistd.h>
 #include <string.h>
 #include <stdarg.h>
+#include <time.h>
+#include <stdlib.h>
 
 #include "nvmlwrap.h"
 #include "core.h"
@@ -200,4 +203,50 @@ bool matchIfList(const char* string, int port, struct netIf* ifList, int listSiz
     }
   }
   return false;
+}
+
+struct timeIndex {
+    double time;
+    int idx;
+};
+
+int estimate_cmp(const void* ti1, const void* ti2) {
+    double t1 = ((struct timeIndex*)ti1)->time;
+    double t2 = ((struct timeIndex*)ti2)->time;
+    if (t1 < t2) {
+        return -1;
+    } else if (t1 == t2) {
+        return 0;
+    } else {
+        return 1;
+    }
+}
+
+ncclResult_t estimate(ncclComm* comm, struct timeval* tv) {
+    if(comm->countAT < comm->syncOps) {
+        double at = (tv->tv_sec + ((double)tv->tv_usec)/10e6F);
+        comm->countAT += 1;
+        comm->arrivalTime += (at-comm->arrivalTime)/comm->countAT;
+    } else if (comm->countAT == comm->syncOps) {
+        comm->countAT = 0;
+        int nRanks = comm->nRanks;
+        double* ats;
+        NCCLCHECK(ncclCalloc(&ats, nRanks));
+        ats[comm->rank] = comm->arrivalTime;
+        NCCLCHECK(bootstrapAllGather(comm->bootstrap, ats, sizeof(double)));
+        struct timeIndex* atss;
+        NCCLCHECK(ncclCalloc(&atss, nRanks));
+        for (int i=0;i<comm->nRanks;i++) {
+            atss[i].idx = i;
+            atss[i].time = ats[i];
+        }
+        qsort(atss, comm->nRanks, sizeof(struct timeIndex), estimate_cmp);
+        for (int i=0;i<comm->nRanks;i++) {
+            printf("%f %d", atss[i].time, atss[i].idx);
+        }
+        printf("\n");
+        //NCCLCHECK(initTransportsRank(comm, NULL));
+        //comm->coll->args->comm->channels
+    }
+    return ncclSuccess;
 }

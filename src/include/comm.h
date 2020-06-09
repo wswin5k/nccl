@@ -122,6 +122,12 @@ struct ncclComm {
   // Global proxy thread
   pthread_t proxyThread;
   struct ncclProxyState proxyState;
+
+  // time measurment for all reduce
+  int syncOps;
+  double arrivalTime;
+  int countAT;
+  int funcIndex;
 };
 
 #endif

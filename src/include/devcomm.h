@@ -97,11 +97,11 @@ struct ncclRing {
 };
 
 
-#define NCCL_MAX_TREE_ARITY 3
+#define NCCL_MAX_TREE_ARITY 1
 struct ncclTree {
   int depth;
   int up;
-  int down[NCCL_MAX_TREE_ARITY];
+  int down[3];
 };
 
 struct ncclPeer {

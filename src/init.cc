@@ -250,6 +250,7 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
 
   comm->rank = comm->hostDevComm.rank =rank;
   comm->nRanks = comm->hostDevComm.nRanks = ndev;
+  comm->syncOps = 10;
   cudaGetDevice(&comm->cudaDev);
   getNvmlDevice(comm->cudaDev, &comm->nvmlDev);
   TRACE(NCCL_INIT,"comm %p rank %d nranks %d cudaDev %d nvmlDev %d", comm, rank, ndev, comm->cudaDev, comm->nvmlDev);
@@ -399,11 +400,29 @@ static ncclResult_t setupChannel(struct ncclComm* comm, int channelId, int rank,
   struct ncclTree* tree = &channel->tree;
   tree->up = -1;
   tree->down[0] = tree->down[1] = tree->down[2] = -1;
+  // flat tree
+  tree->depth = nranks;
+  char* str = getenv("NCCL_TREE");
+  int treeIx;
+  int it = 0;
+  while(str[it]) {
+    treeIx = str[it] - '0';
+    if (treeIx == rank) {
+        if(it > 0) {
+            tree->down[0] = str[it-1] - '0';
+        }
+        if(it < nranks-1) {
+            tree->up = str[it+1] - '0';
+        }
+    }
+    it++;
+  }
+  TRACE(NCCL_INIT, "Tree: %d->%d->%d", tree->down[0], rank, tree->up);
 
   //
   // Find per-node masters and connect them via a binary tree
   //
-
+/*
   int nMasters = 0;
   for (int r=0; r<nranks; r++) nMasters += treeMasters[r];
   if (nMasters == 0) {
@@ -464,6 +483,7 @@ static ncclResult_t setupChannel(struct ncclComm* comm, int channelId, int rank,
     }
     free(ranks);
   }
+  */
 
   TRACE(NCCL_INIT, "rank %d nranks %d - DONE", rank, nranks);
   return ncclSuccess;

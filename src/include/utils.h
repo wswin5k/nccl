@@ -22,4 +22,8 @@ struct netIf {
 int parseStringList(const char* string, struct netIf* ifList, int maxList);
 bool matchIfList(const char* string, int port, struct netIf* ifList, int listSize);
 
+static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* commId);
+
+ncclResult_t estimate(ncclComm* comm, struct timeval* tv);
+
 #endif
