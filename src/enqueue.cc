@@ -4,6 +4,8 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 
+#include <stdio.h>
+#include <sys/time.h>
 #include "enqueue.h"
 #include "checks.h"
 #include "param.h"
@@ -103,6 +105,7 @@ ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* params)
   coll->active = 0;
 
   params->func = ncclKerns[coll->funcIndex];
+  comm->funcIndex = coll->funcIndex;
   return ncclSuccess;
 }
 
@@ -193,6 +196,19 @@ ncclResult_t ncclBarrierEnqueueWait(ncclComm_t comm) {
   NCCLCHECK(ncclCpuBarrierOut(comm));
 
   struct cudaLaunchParams *params = comm->myParams;
+
+  cudaEvent_t start, stop;
+  cudaEventCreateWithFlags(&start, cudaEventBlockingSync);
+  cudaEventCreateWithFlags(&stop, cudaEventBlockingSync);
+
+  cudaEventRecord(start, params->stream);
+  cudaEventSynchronize(start);
+  clock_t endComp = clock();
+  struct timeval starttv;
+  struct timeval stoptv;
+  double startSecs, stopSecs;
+  gettimeofday(&starttv, NULL);
+  startSecs = starttv.tv_sec + ((double)starttv.tv_usec)/1000000.0;
   if (comm->launchMode == ncclComm::PARALLEL) {
     CUDACHECK(cudaLaunchKernel(params->func, params->gridDim, params->blockDim, params->args, params->sharedMem, params->stream));
   }
@@ -206,8 +222,24 @@ ncclResult_t ncclBarrierEnqueueWait(ncclComm_t comm) {
     channel->collStart = channel->collFifoTail;
     channel->collCount = 0;
   }
+  int bx = params->blockDim.x;
   params->gridDim.x = params->blockDim.x = 0;
   NCCLCHECK(transportStartProxy(comm));
+  
+  cudaEventRecord(stop, params->stream);
+  cudaEventSynchronize(stop);
+  clock_t beginComp = clock();
+  gettimeofday(&stoptv, NULL);
+  stopSecs = stoptv.tv_sec + ((double)stoptv.tv_usec)/1000000.0;
+  float milliseconds;
+  cudaEventElapsedTime(&milliseconds, start, stop);
+  if (comm->funcIndex >= 576 && comm->funcIndex <= 719 && bx != 64) { // all-reduce operations
+//   fprintf(stderr,"%u %u\n", bx, gx);
+//   float endComm = 1000*(beginComp-comm->startTime)/CLOCKS_PER_SEC;
+//   float beginComm = 1000*(endComp-comm->startTime)/CLOCKS_PER_SEC;
+     fprintf(stderr, "%d %f %f %f\n", comm->cudaDev, startSecs, stopSecs, milliseconds);
+     fflush(stderr);
+  }
   return ncclSuccess;
 }
 

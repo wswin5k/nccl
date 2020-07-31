@@ -54,6 +54,9 @@ struct ncclRecvMem {
 };
 
 struct ncclComm {
+  double startTime;
+  int funcIndex;
+
   struct ncclChannel channels[MAXCHANNELS];
 
   struct ncclPeerInfo* peerInfo;
